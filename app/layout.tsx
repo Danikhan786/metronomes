@@ -6,8 +6,6 @@ export const metadata = {
   title: "Circular Metronome",
   description: "A better approach practicing your timing",
   generator: 'v0.dev',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover',
-  themeColor: '#000000',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -16,6 +14,15 @@ export const metadata = {
   formatDetection: {
     telephone: false,
   },
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+  themeColor: '#000000',
 }
 
 export default function RootLayout({
@@ -27,8 +34,6 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-        <meta name="theme-color" content="#000000" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Circular Metronome" />

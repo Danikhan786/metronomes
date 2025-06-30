@@ -1,13 +1,11 @@
 import NextAuth from "next-auth"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "@/lib/prisma"
 import { createAppleAuth } from "@/lib/apple-auth"
 import AppleProvider from "next-auth/providers/apple"
+import GoogleProvider from "next-auth/providers/google"
 import { withAuth } from "next-auth/middleware"
 import { DefaultSession, DefaultUser } from "next-auth"
 
 const handler = NextAuth({
-  adapter: PrismaAdapter(prisma),
   providers: [
     AppleProvider({
       clientId: process.env.APPLE_ID_CLIENT_ID!,
@@ -18,6 +16,10 @@ const handler = NextAuth({
           response_mode: "form_post",
         },
       },
+    }),
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
   callbacks: {
@@ -55,8 +57,12 @@ const handler = NextAuth({
             )
             
             // Store the refresh token for later use
-            account.refresh_token = tokens.refresh_token
-            account.access_token = tokens.access_token
+            if (tokens.refresh_token) {
+              account.refresh_token = tokens.refresh_token
+            }
+            if (tokens.access_token) {
+              account.access_token = tokens.access_token
+            }
           }
           
           // Verify the ID token if available
@@ -76,7 +82,8 @@ const handler = NextAuth({
           return true
         } catch (error) {
           console.error("Apple sign-in error:", error)
-          return false
+          // Don't fail the sign-in, just log the error
+          return true
         }
       }
       

@@ -768,7 +768,7 @@ export default function Metronome() {
   return (
     <div className={styles.container}>
       {/* Mobile-optimized Auth Button */}
-      {/* <MobileAuthButton /> */}
+      <MobileAuthButton />
 
       <div
         className={styles.metronomeCircle}

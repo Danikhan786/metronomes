@@ -15,6 +15,8 @@ export default withAuth(
 
 export const config = {
   matcher: [
+    // Protect the home page
+    "/",
     // Protect all routes under /dashboard
     "/dashboard/:path*",
     // Add other protected routes here

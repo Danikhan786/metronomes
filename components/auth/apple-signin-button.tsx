@@ -93,11 +93,11 @@ export default function AppleSignInButton({
           disabled={isLoading || disabled}
           className={buttonClasses}
         >
-          {isLoading ? (
+          {/* {isLoading ? (
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
           ) : (
-            <Apple className="mr-2 h-4 w-4" />
-          )}
+            // <Apple className="mr-2 h-4 w-4" />
+          )} */}
           <span className="hidden sm:inline">Sign Out</span>
           <span className="sm:hidden">Out</span>
         </button>
