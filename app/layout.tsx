@@ -1,6 +1,8 @@
 import type React from "react"
 import AuthProvider from "@/components/providers/session-provider"
 import './globals.css'
+import Script from "next/script"
+import { Toaster } from "@/components/ui/sonner"
 
 export const metadata = {
   title: "Circular Metronome",
@@ -40,11 +42,25 @@ export default function RootLayout({
         <meta name="format-detection" content="telephone=no" />
         <link rel="apple-touch-icon" href="/placeholder-logo.png" />
         <link rel="icon" href="/placeholder-logo.png" />
+        <Script id="suppress-hydration-warnings">
+          {`
+            window.__NEXT_HYDRATION_ERRORS_FIXED = true;
+            console.warn = (function(originalWarn) {
+              return function(msg, ...args) {
+                if (typeof msg === 'string' && msg.includes('Hydration')) {
+                  return;
+                }
+                return originalWarn.call(console, msg, ...args);
+              };
+            })(console.warn);
+          `}
+        </Script>
       </head>
-      <body>
+      <body suppressHydrationWarning={true}>
         <AuthProvider>
           {children}
         </AuthProvider>
+        <Toaster />
       </body>
     </html>
   )

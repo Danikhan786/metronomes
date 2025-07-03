@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from "react"
 import { Plus, Minus } from "lucide-react"
 import styles from "./metronome.module.css"
 import MobileAuthButton from "@/components/auth/mobile-auth-button"
+import { toast } from "sonner"
 
 export default function Metronome() {
   // ===== CONFIGURABLE VARIABLES =====
@@ -507,9 +508,9 @@ export default function Metronome() {
 
   // Handle upgrade button click
   const handleUpgrade = () => {
-    localStorage.setItem("metronome_has_upgraded", "true")
-    setHasUpgraded(true)
-    setShowUpgradeMessage(false)
+    toast("Coming Soon", {
+      description: "This feature will be available soon.",
+    });
   }
 
   // Handle 5-minute sessions button click
@@ -884,3 +885,5 @@ export default function Metronome() {
     </div>
   )
 }
+
+
