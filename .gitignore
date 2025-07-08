@@ -26,5 +26,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-
+# Firebase service account keys (sensitive credentials)
 circular-metronome-firebase-adminsdk-fbsvc-076526b958.json
+*.firebase-adminsdk-*.json
