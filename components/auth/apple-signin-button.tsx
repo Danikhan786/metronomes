@@ -31,7 +31,7 @@ export default function AppleSignInButton({
     setIsLoading(true)
     try {
       await signIn("apple", {
-        callbackUrl: "/dashboard",
+        callbackUrl: "/",
       })
     } catch (error) {
       console.error("Sign in error:", error)

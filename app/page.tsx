@@ -4,11 +4,16 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { Plus, Minus } from "lucide-react"
+import { useSession } from "next-auth/react"
 import styles from "./metronome.module.css"
 import MobileAuthButton from "@/components/auth/mobile-auth-button"
+import AppleSignInButton from "@/components/auth/apple-signin-button"
+import GoogleSignInButton from "@/components/auth/google-signin-button"
 import { toast } from "sonner"
 
 export default function Metronome() {
+  const { data: session, status } = useSession()
+
   // ===== CONFIGURABLE VARIABLES =====
   const MAX_TRIAL_SESSION_COUNT = 2 // After this many sessions, trial mode kicks in
   const EXPIRED_TRIAL_RUN_TIME_SECONDS = 10 // How long metronome runs before decrement mode
@@ -121,158 +126,6 @@ export default function Metronome() {
       cleanupAllIntervals()
     }
   }, [])
-
-  const cleanupAllIntervals = () => {
-    // Clear increase button intervals and timeouts
-    if (increaseIntervalRef.current) {
-      clearInterval(increaseIntervalRef.current)
-      increaseIntervalRef.current = null
-    }
-    increaseTimeoutsRef.current.forEach((timeout) => {
-      if (timeout) clearTimeout(timeout)
-    })
-    increaseTimeoutsRef.current = []
-
-    // Clear decrease button intervals and timeouts
-    if (decreaseIntervalRef.current) {
-      clearInterval(decreaseIntervalRef.current)
-      decreaseIntervalRef.current = null
-    }
-    decreaseTimeoutsRef.current.forEach((timeout) => {
-      if (timeout) clearTimeout(timeout)
-    })
-    decreaseTimeoutsRef.current = []
-
-    // Clear time tracking interval
-    if (timeTrackingIntervalRef.current) {
-      clearInterval(timeTrackingIntervalRef.current)
-      timeTrackingIntervalRef.current = null
-    }
-
-    // Reset touch flags
-    increaseTouchActiveRef.current = false
-    decreaseTouchActiveRef.current = false
-
-    // Clear tap timeout
-    if (tapTimeoutRef.current) {
-      clearTimeout(tapTimeoutRef.current)
-      tapTimeoutRef.current = null
-    }
-  }
-
-  // Function to play a click tone using Web Audio API
-  const playClickTone = () => {
-    if (!audioContextRef.current) return
-
-    try {
-      const context = audioContextRef.current
-
-      if (context.state === "suspended") {
-        context.resume()
-      }
-
-      const oscillator = context.createOscillator()
-      const gainNode = context.createGain()
-
-      oscillator.type = "sine"
-      oscillator.frequency.setValueAtTime(220, context.currentTime)
-
-      gainNode.gain.setValueAtTime(0.6, context.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1)
-
-      oscillator.connect(gainNode)
-      gainNode.connect(context.destination)
-
-      oscillator.start(context.currentTime)
-      oscillator.stop(context.currentTime + 0.1)
-    } catch (error) {
-      console.error("Error playing click tone:", error)
-    }
-  }
-
-  // Function to play tap tone at 220 Hz
-  const playTapTone = () => {
-    if (!audioContextRef.current) return
-
-    try {
-      const context = audioContextRef.current
-
-      if (context.state === "suspended") {
-        context.resume()
-      }
-
-      const oscillator = context.createOscillator()
-      const gainNode = context.createGain()
-
-      oscillator.type = "sine"
-      oscillator.frequency.setValueAtTime(220, context.currentTime)
-
-      gainNode.gain.setValueAtTime(0.4, context.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.05)
-
-      oscillator.connect(gainNode)
-      gainNode.connect(context.destination)
-
-      oscillator.start(context.currentTime)
-      oscillator.stop(context.currentTime + 0.05)
-    } catch (error) {
-      console.error("Error playing tap tone:", error)
-    }
-  }
-
-  const handleTap = () => {
-    const now = Date.now()
-
-    // Play the tap tone
-    playTapTone()
-
-    // Clear existing timeout
-    if (tapTimeoutRef.current) {
-      clearTimeout(tapTimeoutRef.current)
-    }
-
-    setTapTimes((prev) => {
-      const newTimes = [...prev, now]
-
-      // Keep only the last 8 taps for better accuracy
-      if (newTimes.length > 8) {
-        newTimes.shift()
-      }
-
-      // Calculate BPM if we have at least 2 taps
-      if (newTimes.length >= 2) {
-        const intervals = []
-        for (let i = 1; i < newTimes.length; i++) {
-          intervals.push(newTimes[i] - newTimes[i - 1])
-        }
-
-        // Calculate average interval
-        const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length
-
-        // Convert to BPM (60000 ms = 1 minute)
-        const calculatedBpm = Math.round(60000 / avgInterval)
-
-        // Only update if BPM is within reasonable range
-        if (calculatedBpm >= MIN_BPM && calculatedBpm <= MAX_BPM && !isSlowingDown) {
-          setBpm(calculatedBpm)
-        }
-      }
-
-      return newTimes
-    })
-
-    // Set timeout to end tap session after 2 seconds
-    tapTimeoutRef.current = setTimeout(() => {
-      setTapTimes([])
-      setShowTapButton(false)
-    }, 2000)
-  }
-
-  const startTapMode = () => {
-    setShowTapButton(true)
-    setTapTimes([])
-    setIsPlaying(false) // Stop the metronome when entering tap mode
-  }
 
   // Handle play/stop state changes
   useEffect(() => {
@@ -427,19 +280,6 @@ export default function Metronome() {
     }
   }
 
-  // Handle 75% position reached
-  const handle75Percent = () => {
-    if (!hasReached75Percent) {
-      setHasReached75Percent(true)
-      setScaleEffect(1.05) // Slight zoom effect
-
-      // Reset scale after a short delay
-      setTimeout(() => {
-        setScaleEffect(1)
-      }, 100)
-    }
-  }
-
   // Main animation function
   const animateMetronome = () => {
     const animate = (timestamp: number) => {
@@ -478,6 +318,233 @@ export default function Metronome() {
     }
 
     animationRef.current = requestAnimationFrame(animate)
+  }
+
+  // Function to play a click tone using Web Audio API
+  const playClickTone = () => {
+    if (!audioContextRef.current) return
+
+    try {
+      const context = audioContextRef.current
+
+      if (context.state === "suspended") {
+        context.resume()
+      }
+
+      const oscillator = context.createOscillator()
+      const gainNode = context.createGain()
+
+      oscillator.type = "sine"
+      oscillator.frequency.setValueAtTime(220, context.currentTime)
+
+      gainNode.gain.setValueAtTime(0.6, context.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1)
+
+      oscillator.connect(gainNode)
+      gainNode.connect(context.destination)
+
+      oscillator.start(context.currentTime)
+      oscillator.stop(context.currentTime + 0.1)
+    } catch (error) {
+      console.error("Error playing click tone:", error)
+    }
+  }
+
+  // Show loading state while checking authentication
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
+    )
+  }
+
+  // Show authentication page if user is not logged in
+  if (status === "unauthenticated") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <h2 className="mt-6 text-2xl sm:text-3xl font-extrabold text-gray-900">
+              Sign in to your account
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 px-4">
+              Use your Apple ID or Google account to continue
+            </p>
+          </div>
+
+          <div className="mt-8 space-y-6">
+            <div className="space-y-4">
+              <AppleSignInButton
+                className="w-full"
+                size="lg"
+              />
+              <GoogleSignInButton
+                className="w-full"
+                size="lg"
+              />
+
+              <div className="text-center px-4">
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  By signing in, you agree to our{" "}
+                  <a href="/terms" className="text-blue-600 hover:text-blue-500 underline">
+                    Terms of Service
+                  </a>{" "}
+                  and{" "}
+                  <a href="/privacy" className="text-blue-600 hover:text-blue-500 underline">
+                    Privacy Policy
+                  </a>
+                </p>
+              </div>
+
+              <div className="text-center">
+                <a
+                  href="/clear-data"
+                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                  Having trouble? Clear test data
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const cleanupAllIntervals = () => {
+    // Clear increase button intervals and timeouts
+    if (increaseIntervalRef.current) {
+      clearInterval(increaseIntervalRef.current)
+      increaseIntervalRef.current = null
+    }
+    increaseTimeoutsRef.current.forEach((timeout) => {
+      if (timeout) clearTimeout(timeout)
+    })
+    increaseTimeoutsRef.current = []
+
+    // Clear decrease button intervals and timeouts
+    if (decreaseIntervalRef.current) {
+      clearInterval(decreaseIntervalRef.current)
+      decreaseIntervalRef.current = null
+    }
+    decreaseTimeoutsRef.current.forEach((timeout) => {
+      if (timeout) clearTimeout(timeout)
+    })
+    decreaseTimeoutsRef.current = []
+
+    // Clear time tracking interval
+    if (timeTrackingIntervalRef.current) {
+      clearInterval(timeTrackingIntervalRef.current)
+      timeTrackingIntervalRef.current = null
+    }
+
+    // Reset touch flags
+    increaseTouchActiveRef.current = false
+    decreaseTouchActiveRef.current = false
+
+    // Clear tap timeout
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current)
+      tapTimeoutRef.current = null
+    }
+  }
+
+  // Function to play tap tone at 220 Hz
+  const playTapTone = () => {
+    if (!audioContextRef.current) return
+
+    try {
+      const context = audioContextRef.current
+
+      if (context.state === "suspended") {
+        context.resume()
+      }
+
+      const oscillator = context.createOscillator()
+      const gainNode = context.createGain()
+
+      oscillator.type = "sine"
+      oscillator.frequency.setValueAtTime(220, context.currentTime)
+
+      gainNode.gain.setValueAtTime(0.4, context.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.05)
+
+      oscillator.connect(gainNode)
+      gainNode.connect(context.destination)
+
+      oscillator.start(context.currentTime)
+      oscillator.stop(context.currentTime + 0.05)
+    } catch (error) {
+      console.error("Error playing tap tone:", error)
+    }
+  }
+
+  const handleTap = () => {
+    const now = Date.now()
+
+    // Play the tap tone
+    playTapTone()
+
+    // Clear existing timeout
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current)
+    }
+
+    setTapTimes((prev) => {
+      const newTimes = [...prev, now]
+
+      // Keep only the last 8 taps for better accuracy
+      if (newTimes.length > 8) {
+        newTimes.shift()
+      }
+
+      // Calculate BPM if we have at least 2 taps
+      if (newTimes.length >= 2) {
+        const intervals = []
+        for (let i = 1; i < newTimes.length; i++) {
+          intervals.push(newTimes[i] - newTimes[i - 1])
+        }
+
+        // Calculate average interval
+        const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length
+
+        // Convert to BPM (60000 ms = 1 minute)
+        const calculatedBpm = Math.round(60000 / avgInterval)
+
+        // Only update if BPM is within reasonable range
+        if (calculatedBpm >= MIN_BPM && calculatedBpm <= MAX_BPM && !isSlowingDown) {
+          setBpm(calculatedBpm)
+        }
+      }
+
+      return newTimes
+    })
+
+    // Set timeout to end tap session after 2 seconds
+    tapTimeoutRef.current = setTimeout(() => {
+      setTapTimes([])
+      setShowTapButton(false)
+    }, 2000)
+  }
+
+  const startTapMode = () => {
+    setShowTapButton(true)
+    setTapTimes([])
+    setIsPlaying(false) // Stop the metronome when entering tap mode
+  }
+
+  // Handle 75% position reached
+  const handle75Percent = () => {
+    if (!hasReached75Percent) {
+      setHasReached75Percent(true)
+      setScaleEffect(1.05) // Slight zoom effect
+
+      // Reset scale after a short delay
+      setTimeout(() => {
+        setScaleEffect(1)
+      }, 100)
+    }
   }
 
   const togglePlay = () => {

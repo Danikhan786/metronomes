@@ -15,10 +15,8 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    // Protect the home page
-    "/",
-    // Protect all routes under /dashboard
-    "/dashboard/:path*",
+    // Protect metronome page
+    "/metronome/:path*",
     // Add other protected routes here
     // "/admin/:path*",
     // "/profile/:path*",
