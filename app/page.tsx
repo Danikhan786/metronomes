@@ -77,24 +77,47 @@ export default function Metronome() {
     const initializeSessionTracking = async () => {
       if (session?.user?.id) {
         try {
+          // Get the session key for this user
+          const sessionKey = `metronome_session_${session.user.id}`
+          
+          // Check if this session was already initialized
+          const sessionInitialized = sessionStorage.getItem(sessionKey)
+          
+          // Check if this is a manual page reload
+          const isManualReload = performance.navigation.type === 1 || 
+                                (performance.getEntriesByType && 
+                                 performance.getEntriesByType('navigation')[0] && 
+                                 (performance.getEntriesByType('navigation')[0] as any).type === 'reload')
+          
           // Get existing session count from Firestore
           const existingSessionData = await getSessionCount(session.user.id)
           
           if (existingSessionData) {
-            // Increment the existing session count
-            const updatedSessionData = await incrementSessionCount(session.user.id)
-            
-            if (updatedSessionData) {
-              setSessionCount(updatedSessionData.sessionCount)
-              setHasUpgraded(updatedSessionData.hasUpgraded)
+            if (isManualReload && !sessionInitialized) {
+              // Only increment if it's a manual reload AND this session hasn't been initialized yet
+              const updatedSessionData = await incrementSessionCount(session.user.id)
+              
+              if (updatedSessionData) {
+                setSessionCount(updatedSessionData.sessionCount)
+                setHasUpgraded(updatedSessionData.hasUpgraded)
+                
+                // Check if trial has expired
+                if (updatedSessionData.sessionCount > MAX_TRIAL_SESSION_COUNT && !updatedSessionData.hasUpgraded) {
+                  setIsTrialExpired(true)
+                }
+              }
+            } else {
+              // Not a manual reload or session already initialized, just use existing data
+              setSessionCount(existingSessionData.sessionCount)
+              setHasUpgraded(existingSessionData.hasUpgraded)
               
               // Check if trial has expired
-              if (updatedSessionData.sessionCount > MAX_TRIAL_SESSION_COUNT && !updatedSessionData.hasUpgraded) {
+              if (existingSessionData.sessionCount > MAX_TRIAL_SESSION_COUNT && !existingSessionData.hasUpgraded) {
                 setIsTrialExpired(true)
               }
             }
           } else {
-            // Create new session count document
+            // Create new session count document (only on first visit)
             const newSessionData = await incrementSessionCount(session.user.id)
             
             if (newSessionData) {
@@ -102,6 +125,9 @@ export default function Metronome() {
               setHasUpgraded(newSessionData.hasUpgraded)
             }
           }
+          
+          // Mark this session as initialized to prevent double counting
+          sessionStorage.setItem(sessionKey, 'true')
         } catch (error) {
           console.error('Error initializing session tracking:', error)
           // Fallback to default values
@@ -115,6 +141,27 @@ export default function Metronome() {
       initializeSessionTracking()
     }
   }, [session, status])
+
+  // Set up beforeunload event listener to clear session storage on manual reloads
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      // Clear session storage for this user when page is unloaded
+      // This allows the session count to increment on the next manual reload
+      if (session?.user?.id) {
+        const sessionKey = `metronome_session_${session.user.id}`
+        sessionStorage.removeItem(sessionKey)
+      }
+    }
+
+    // Add event listener
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [session?.user?.id])
+
 
   // Keep currentBpmRef in sync with bpm
   useEffect(() => {
@@ -992,6 +1039,10 @@ export default function Metronome() {
         <div>Expired Trial Timeout Time: {EXPIRED_TRIAL_RUN_TIME_SECONDS}s</div>
         <div>Trial Expired: {isTrialExpired ? "Yes" : "No"}</div>
         <div>Has Upgraded: {hasUpgraded ? "Yes" : "No"}</div>
+        <div>Navigation Type: {performance.navigation.type === 1 ? "Reload" : performance.navigation.type === 0 ? "Navigate" : "Back/Forward"}</div>
+        <div>Performance Navigation Type: {performance.getEntriesByType && performance.getEntriesByType('navigation')[0] ? (performance.getEntriesByType('navigation')[0] as any).type : "N/A"}</div>
+        <div>Session Initialized: {session?.user?.id ? sessionStorage.getItem(`metronome_session_${session.user.id}`) ? "Yes" : "No" : "N/A"}</div>
+        <div>Is Manual Reload: {performance.navigation.type === 1 || (performance.getEntriesByType && performance.getEntriesByType('navigation')[0] && (performance.getEntriesByType('navigation')[0] as any).type === 'reload') ? "Yes" : "No"}</div>
       </div>
 
       {/* Clear Session Button for Testing */}
