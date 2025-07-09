@@ -10,6 +10,7 @@ import MobileAuthButton from "@/components/auth/mobile-auth-button"
 import AppleSignInButton from "@/components/auth/apple-signin-button"
 import GoogleSignInButton from "@/components/auth/google-signin-button"
 import { toast } from "sonner"
+import { getSessionCount, incrementSessionCount, updateUpgradeStatus, resetSessionCount } from "@/lib/session-count"
 
 export default function Metronome() {
   const { data: session, status } = useSession()
@@ -73,25 +74,47 @@ export default function Metronome() {
 
   // Initialize session tracking
   useEffect(() => {
-    // Get session count from localStorage
-    const storedSessionCount = localStorage.getItem("metronome_session_count")
-    const storedHasUpgraded = localStorage.getItem("metronome_has_upgraded")
-
-    const currentSessionCount = storedSessionCount ? Number.parseInt(storedSessionCount) : 0
-    const userHasUpgraded = storedHasUpgraded === "true"
-
-    // Increment session count
-    const newSessionCount = currentSessionCount + 1
-    localStorage.setItem("metronome_session_count", newSessionCount.toString())
-
-    setSessionCount(newSessionCount)
-    setHasUpgraded(userHasUpgraded)
-
-    // Check if trial has expired
-    if (newSessionCount > MAX_TRIAL_SESSION_COUNT && !userHasUpgraded) {
-      setIsTrialExpired(true)
+    const initializeSessionTracking = async () => {
+      if (session?.user?.id) {
+        try {
+          // Get existing session count from Firestore
+          const existingSessionData = await getSessionCount(session.user.id)
+          
+          if (existingSessionData) {
+            // Increment the existing session count
+            const updatedSessionData = await incrementSessionCount(session.user.id)
+            
+            if (updatedSessionData) {
+              setSessionCount(updatedSessionData.sessionCount)
+              setHasUpgraded(updatedSessionData.hasUpgraded)
+              
+              // Check if trial has expired
+              if (updatedSessionData.sessionCount > MAX_TRIAL_SESSION_COUNT && !updatedSessionData.hasUpgraded) {
+                setIsTrialExpired(true)
+              }
+            }
+          } else {
+            // Create new session count document
+            const newSessionData = await incrementSessionCount(session.user.id)
+            
+            if (newSessionData) {
+              setSessionCount(newSessionData.sessionCount)
+              setHasUpgraded(newSessionData.hasUpgraded)
+            }
+          }
+        } catch (error) {
+          console.error('Error initializing session tracking:', error)
+          // Fallback to default values
+          setSessionCount(1)
+          setHasUpgraded(false)
+        }
+      }
     }
-  }, [])
+
+    if (status === 'authenticated' && session?.user?.id) {
+      initializeSessionTracking()
+    }
+  }, [session, status])
 
   // Keep currentBpmRef in sync with bpm
   useEffect(() => {
@@ -574,10 +597,27 @@ export default function Metronome() {
   }
 
   // Handle upgrade button click
-  const handleUpgrade = () => {
-    toast("Coming Soon", {
-      description: "This feature will be available soon.",
-    });
+  const handleUpgrade = async () => {
+    if (session?.user?.id) {
+      try {
+        await updateUpgradeStatus(session.user.id, true)
+        setHasUpgraded(true)
+        setIsTrialExpired(false)
+        setShowUpgradeMessage(false)
+        toast("Upgrade Successful", {
+          description: "You now have unlimited access to the metronome!",
+        });
+      } catch (error) {
+        console.error('Error updating upgrade status:', error)
+        toast("Error", {
+          description: "Failed to process upgrade. Please try again.",
+        });
+      }
+    } else {
+      toast("Coming Soon", {
+        description: "This feature will be available soon.",
+      });
+    }
   }
 
   // Handle 5-minute sessions button click
@@ -588,14 +628,25 @@ export default function Metronome() {
   }
 
   // Handle clear session count for testing
-  const handleClearSessionCount = () => {
-    localStorage.removeItem("metronome_session_count")
-    localStorage.removeItem("metronome_has_upgraded")
-    setSessionCount(0)
-    setHasUpgraded(false)
-    setIsTrialExpired(false)
-    setShowUpgradeMessage(false)
-  }
+  // const handleClearSessionCount = async () => {
+  //   if (session?.user?.id) {
+  //     try {
+  //       await resetSessionCount(session.user.id)
+  //       setSessionCount(0)
+  //       setHasUpgraded(false)
+  //       setIsTrialExpired(false)
+  //       setShowUpgradeMessage(false)
+  //       toast("Session Count Reset", {
+  //         description: "Session count has been reset for testing.",
+  //       });
+  //     } catch (error) {
+  //       console.error('Error resetting session count:', error)
+  //       toast("Error", {
+  //         description: "Failed to reset session count. Please try again.",
+  //       });
+  //     }
+  //   }
+  // }
 
   // Debounced functions
   const debouncedIncrease = () => {
@@ -943,12 +994,10 @@ export default function Metronome() {
         <div>Has Upgraded: {hasUpgraded ? "Yes" : "No"}</div>
       </div>
 
-      {/* Clear Session Button for Testing - COMMENTED OUT */}
-      {/*
-      <button className={styles.clearSessionButton} onClick={handleClearSessionCount}>
+      {/* Clear Session Button for Testing */}
+      {/*<button className={styles.clearSessionButton} onClick={handleClearSessionCount}>
         Clear Session Count
-      </button>
-      */}
+      </button>*/}
     </div>
   )
 }
