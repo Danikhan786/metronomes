@@ -36,6 +36,7 @@ export default function Metronome() {
   const [sessionCount, setSessionCount] = useState(0)
   const [isTrialExpired, setIsTrialExpired] = useState(false)
   const [hasUpgraded, setHasUpgraded] = useState(false)
+  const [isSessionLoading, setIsSessionLoading] = useState(false)
 
   // Add these state variables after the existing state declarations
   const [tapTimes, setTapTimes] = useState<number[]>([])
@@ -79,6 +80,7 @@ export default function Metronome() {
         try {
           // Get the session key for this user
           const sessionKey = `metronome_session_${session.user.id}`
+          const cacheKey = `metronome_cache_${session.user.id}`
           
           // Check if this session was already initialized
           const sessionInitialized = sessionStorage.getItem(sessionKey)
@@ -89,8 +91,42 @@ export default function Metronome() {
                                  performance.getEntriesByType('navigation')[0] && 
                                  (performance.getEntriesByType('navigation')[0] as any).type === 'reload')
           
-          // Get existing session count from Firestore
-          const existingSessionData = await getSessionCount(session.user.id)
+          // Try to get cached data first for immediate display
+          const cachedData = localStorage.getItem(cacheKey)
+          let existingSessionData = null
+          
+          if (cachedData) {
+            try {
+              const parsed = JSON.parse(cachedData)
+              // Check if cache is less than 5 minutes old
+              if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
+                existingSessionData = parsed.data
+                // Set cached data immediately for instant UI display
+                setSessionCount(existingSessionData.sessionCount)
+                setHasUpgraded(existingSessionData.hasUpgraded)
+                if (existingSessionData.sessionCount > MAX_TRIAL_SESSION_COUNT && !existingSessionData.hasUpgraded) {
+                  setIsTrialExpired(true)
+                }
+              }
+            } catch (e) {
+              console.error('Error parsing cached session data:', e)
+            }
+          }
+          
+          // If no valid cache, fetch from Firestore (this will show loading briefly)
+          if (!existingSessionData) {
+            setIsSessionLoading(true)
+            existingSessionData = await getSessionCount(session.user.id)
+            
+            // Cache the data for future use
+            if (existingSessionData) {
+              localStorage.setItem(cacheKey, JSON.stringify({
+                data: existingSessionData,
+                timestamp: Date.now()
+              }))
+            }
+            setIsSessionLoading(false)
+          }
           
           if (existingSessionData) {
             if (isManualReload && !sessionInitialized) {
@@ -101,6 +137,12 @@ export default function Metronome() {
                 setSessionCount(updatedSessionData.sessionCount)
                 setHasUpgraded(updatedSessionData.hasUpgraded)
                 
+                // Update cache with new data
+                localStorage.setItem(cacheKey, JSON.stringify({
+                  data: updatedSessionData,
+                  timestamp: Date.now()
+                }))
+                
                 // Check if trial has expired
                 if (updatedSessionData.sessionCount > MAX_TRIAL_SESSION_COUNT && !updatedSessionData.hasUpgraded) {
                   setIsTrialExpired(true)
@@ -108,22 +150,29 @@ export default function Metronome() {
               }
             } else {
               // Not a manual reload or session already initialized, just use existing data
-              setSessionCount(existingSessionData.sessionCount)
-              setHasUpgraded(existingSessionData.hasUpgraded)
+              // (Data is already set from cache above, so no need to set again)
               
-              // Check if trial has expired
+              // Check if trial has expired (if not already set from cache)
               if (existingSessionData.sessionCount > MAX_TRIAL_SESSION_COUNT && !existingSessionData.hasUpgraded) {
                 setIsTrialExpired(true)
               }
             }
           } else {
             // Create new session count document (only on first visit)
+            setIsSessionLoading(true)
             const newSessionData = await incrementSessionCount(session.user.id)
             
             if (newSessionData) {
               setSessionCount(newSessionData.sessionCount)
               setHasUpgraded(newSessionData.hasUpgraded)
+              
+              // Cache the new data
+              localStorage.setItem(cacheKey, JSON.stringify({
+                data: newSessionData,
+                timestamp: Date.now()
+              }))
             }
+            setIsSessionLoading(false)
           }
           
           // Mark this session as initialized to prevent double counting
@@ -133,6 +182,7 @@ export default function Metronome() {
           // Fallback to default values
           setSessionCount(1)
           setHasUpgraded(false)
+          setIsSessionLoading(false)
         }
       }
     }
@@ -651,6 +701,11 @@ export default function Metronome() {
         setHasUpgraded(true)
         setIsTrialExpired(false)
         setShowUpgradeMessage(false)
+        
+        // Clear the cache to force a fresh fetch
+        const cacheKey = `metronome_cache_${session.user.id}`
+        localStorage.removeItem(cacheKey)
+        
         toast("Upgrade Successful", {
           description: "You now have unlimited access to the metronome!",
         });
@@ -1039,10 +1094,11 @@ export default function Metronome() {
         <div>Expired Trial Timeout Time: {EXPIRED_TRIAL_RUN_TIME_SECONDS}s</div>
         <div>Trial Expired: {isTrialExpired ? "Yes" : "No"}</div>
         <div>Has Upgraded: {hasUpgraded ? "Yes" : "No"}</div>
-        <div>Navigation Type: {performance.navigation.type === 1 ? "Reload" : performance.navigation.type === 0 ? "Navigate" : "Back/Forward"}</div>
+        <div>Session Loading: {isSessionLoading ? "Yes" : "No"}</div>
+        {/* <div>Navigation Type: {performance.navigation.type === 1 ? "Reload" : performance.navigation.type === 0 ? "Navigate" : "Back/Forward"}</div>
         <div>Performance Navigation Type: {performance.getEntriesByType && performance.getEntriesByType('navigation')[0] ? (performance.getEntriesByType('navigation')[0] as any).type : "N/A"}</div>
         <div>Session Initialized: {session?.user?.id ? sessionStorage.getItem(`metronome_session_${session.user.id}`) ? "Yes" : "No" : "N/A"}</div>
-        <div>Is Manual Reload: {performance.navigation.type === 1 || (performance.getEntriesByType && performance.getEntriesByType('navigation')[0] && (performance.getEntriesByType('navigation')[0] as any).type === 'reload') ? "Yes" : "No"}</div>
+        <div>Is Manual Reload: {performance.navigation.type === 1 || (performance.getEntriesByType && performance.getEntriesByType('navigation')[0] && (performance.getEntriesByType('navigation')[0] as any).type === 'reload') ? "Yes" : "No"}</div> */}
       </div>
 
       {/* Clear Session Button for Testing */}
